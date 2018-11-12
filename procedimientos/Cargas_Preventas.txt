@@ -1,0 +1,201 @@
+USE [dsd_vallarta]
+GO
+/****** Object:  StoredProcedure [dbo].[Cargas_Preventas]    Script Date: 12/11/2018 04:51:43 p. m. ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+ALTER PROCEDURE [dbo].[Cargas_Preventas]
+   @tipo SMALLINT,
+   @id_ruta INT, 
+   @fecha DATE
+     
+AS
+BEGIN
+	
+	SET NOCOUNT ON;
+
+   DECLARE @temp_existencia_vehiculo TABLE (
+      id_ruta INT,
+      ruta VARCHAR(MAX),
+      nombre VARCHAR(MAX),
+      id_producto INT,
+      producto VARCHAR(MAX),
+      id_linea INT,
+      linea VARCHAR(MAX),
+      id_familia INT,
+      Total FLOAT,
+      Total2 FLOAT,
+      Total3 FLOAT,
+      empresa VARCHAR(MAX),
+      cedis VARCHAR(MAX)
+   )
+
+   DECLARE @id_lista_precio INT 
+
+   DELETE @temp_existencia_vehiculo
+   INSERT INTO @temp_existencia_vehiculo EXEC Rep_Existencia_Vehiculo @fecha, 2, 1, 1
+
+   SET @id_lista_precio = (SELECT id_lista_precio FROM cat_rutas WHERE id_ruta = @id_ruta AND activo = 1)
+
+   SELECT ld.id_producto,ld.precio_unitario
+   INTO #PRECIO
+   FROM cat_lista_precios cl 
+   INNER JOIN cat_lista_precios_detalle ld ON ld.id_lista_precio = cl.id_lista_precio
+   WHERE cl.id_lista_precio = @id_lista_precio AND @fecha BETWEEN ld.fecha_inicio AND ld.fecha_fin
+
+   SELECT 
+   id_producto, 
+   SUM(inventario_fisico) - SUM(carga) AS inventario_almacen, 
+   SUM(inventario_vehiculo) AS inventario_vehiculo
+   INTO #TABLA_PRODUCTOS_CARGAS
+   FROM (
+	   
+      /*INVENTARIO FISICO_ALMACEN*/
+	   SELECT 
+      id_producto,
+      cantidad AS inventario_fisico,
+      0 AS inventario_almacen,
+      0 AS carga, 
+      0 AS inventario_vehiculo
+      FROM inventarios_fisicos 
+      WHERE fecha = @fecha
+
+	   /*INVENTARIO_VEHICULO*/
+      UNION ALL
+      SELECT 
+      id_producto,
+      0 AS inventario_fisico,
+      0 AS inventario_almacen,
+      0 AS carga, 
+      total AS inventario_vehiculo
+      FROM @temp_existencia_vehiculo  WHERE id_ruta = @id_ruta
+
+	   /*CARGAS FUERA DE FECHA */
+      UNION ALL 
+	   SELECT 
+      CD.id_producto,
+      0 AS inventario_fisico,
+      0 AS inventario_almacen, 
+      IIF(c.movimiento = 'DESCARGA', CD.cantidad * -1, CD.cantidad) AS carga, 
+      0 AS inventario_vehiculo
+      FROM  cargas c 
+      INNER JOIN cargas_detalle CD ON c.id_carga = CD.id_carga 
+      WHERE  c.fecha_registro >= @fecha  AND c.fecha_registro <> c.fecha
+   
+   )TABLA1
+   WHERE inventario_fisico > 0 OR inventario_almacen > 0 OR inventario_vehiculo > 0 OR carga <> 0
+   GROUP BY id_producto
+
+	 	-- Texto con el Nombre de los Encabezados para la columnas del PIVOT
+      DECLARE @cols  AS NVARCHAR(MAX)
+      DECLARE @query AS NVARCHAR(MAX)
+      DECLARE @fecha_entrega DATE = @fecha
+
+      IF @tipo = 1 
+      BEGIN
+         IF (DATEPART(DW, @fecha) = 6)
+         BEGIN
+            SET @fecha_entrega = (SELECT DATEADD(DAY, 2, @fecha))
+         END
+         ELSE
+            SET @fecha_entrega = (SELECT DATEADD(DAY, 1, @fecha))
+      END
+         
+      SELECT @cols = STUFF((SELECT DISTINCT ',' + QUOTENAME(ruta)
+      FROM cat_rutas 
+      WHERE id_ruta_reparto = @id_ruta AND id_ruta_tipo = 2 AND activo = 1
+      FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'),1,1,'');
+
+      SET @cols = @cols + ',[almacen],[carga]'
+      
+      SELECT
+      'almacen' AS movimiento,
+	   #TABLA_PRODUCTOS_CARGAS.id_producto,
+      #TABLA_PRODUCTOS_CARGAS.inventario_almacen AS cantidad
+	   INTO #ALMACEN
+	   FROM #TABLA_PRODUCTOS_CARGAS 
+      
+
+      SELECT 
+      r.ruta AS movimiento,
+      d.id_producto,
+      d.cantidad
+      INTO #PREVENTA
+      FROM preventas p
+      INNER JOIN preventas_detalle d ON d.id_preventa = p.id_preventa
+      INNER JOIN cat_rutas r ON r.id_ruta = p.id_ruta AND r.activo = 1
+      WHERE p.fecha_entrega = @fecha_entrega AND p.activo = 1 AND r.id_ruta_reparto = @id_ruta AND r.id_ruta_tipo = 2
+
+
+      --Consulta para sacar la diferencia entre liquidacione y notas de venta
+      SELECT 
+      'carga' AS movimiento, 
+      id_producto, 
+      SUM(cantidad) AS cantidad
+      INTO #CARGA
+      FROM (SELECT id_producto, cantidad FROM #PREVENTA) t_preventas
+      GROUP BY id_producto
+
+      -- union de todas las consultas
+		SELECT 
+      TODO.movimiento,
+      CONCAT(pg.orden, ' - ', pg.nombre, ' - ', lin.orden, ' - ', lin.nombre) AS proveedor_linea,
+		TODO.id_producto, 
+      p.nombre AS producto,
+      ISNULL(#PRECIO.precio_unitario,0) AS precio, 
+      ISNULL(TODO.cantidad,0) AS cantidad,
+      ISNULL(inventario_vehiculo,0) AS vehiculo
+		INTO #TODO
+		FROM (
+		      SELECT movimiento, id_producto, cantidad
+            FROM #ALMACEN
+            
+            UNION ALL
+		      SELECT movimiento, id_producto, cantidad
+            FROM #PREVENTA
+
+            UNION ALL
+			   SELECT movimiento, id_producto, cantidad
+            FROM #CARGA
+
+      ) TODO
+      INNER JOIN cat_productos p ON p.id_producto = TODO.id_producto
+		INNER JOIN cat_proveedores_grupo pg ON pg.id_grupo_proveedor = p.id_grupo_proveedor
+		INNER JOIN cat_lineas lin ON lin.id_linea = p.id_linea
+      INNER JOIN #PRECIO ON #PRECIO.id_producto = TODO.id_producto
+      LEFT JOIN #TABLA_PRODUCTOS_CARGAS ON #TABLA_PRODUCTOS_CARGAS.id_producto = p.id_producto
+      ORDER BY movimiento
+            
+      
+      IF @tipo = 1
+      BEGIN
+
+         SET @query = 'SELECT *,
+                  ROUND(ISNULL(carga,2) * ISNULL(precio, 0),2) AS total,
+                  IIF(ISNULL(carga,0) > ISNULL(almacen,0), 1, 0) AS excedido
+                  FROM #TODO
+		            PIVOT (SUM(cantidad) FOR movimiento IN (' + @cols + ')) AS movimiento
+                  WHERE carga > 0 AND almacen > 0
+                  ORDER BY proveedor_linea, producto
+                  ';
+
+		    EXEC(@query)
+
+      END
+
+      IF @tipo = 2
+      BEGIN
+         
+         SELECT almacen.id_producto 
+         INTO #apareceran
+         FROM #TODO almacen
+         INNER JOIN #TODO carga ON carga.id_producto = almacen.id_producto AND carga.movimiento = 'carga'
+         WHERE almacen.movimiento = 'almacen' AND carga.cantidad > 0 AND almacen.cantidad > 0
+         ORDER BY id_producto
+
+         SELECT * FROM #TODO WHERE id_producto IN (SELECT id_producto FROM #APARECERAN)
+
+      END
+
+END
