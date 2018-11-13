@@ -1,10 +1,15 @@
 USE [dsd_vallarta]
 GO
-/****** Object:  StoredProcedure [dbo].[Cat_Productos_Inventario]    Script Date: 12/11/2018 04:49:20 p. m. ******/
+/****** Object:  StoredProcedure [dbo].[Cat_Productos_Inventario]    Script Date: 12/11/2018 05:08:08 p. m. ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
+-- =============================================
+-- Author:		<Author,,Name>
+-- Create date: <Create Date,,>
+-- Description:	<Description,,>
+-- =============================================
 ALTER PROCEDURE [dbo].[Cat_Productos_Inventario]
        -- Add the parameters for the stored procedure here
        @id_ruta AS int,
@@ -47,7 +52,7 @@ BEGIN
         inner join cat_proveedores_grupo ON cat_productos.id_grupo_proveedor = cat_proveedores_grupo.id_grupo_proveedor
         inner join cat_tasa_iva ON 4 = cat_tasa_iva.id_tasa_iva
         inner join cat_tasa_ieps ON 1 = cat_tasa_ieps.id_tasa_ieps
-        WHERE id_lista_precio =   2   AND @fecha BETWEEN cat_lista_precios_detalle.fecha_inicio AND cat_lista_precios_detalle.fecha_fin /*AND cat_lista_precios_detalle.fecha_inicio >= '2016-01-01'*/
+        WHERE id_lista_precio = @id_lista_precio AND @fecha BETWEEN cat_lista_precios_detalle.fecha_inicio AND cat_lista_precios_detalle.fecha_fin /*AND cat_lista_precios_detalle.fecha_inicio >= '2016-01-01'*/
         GROUP BY
         cat_lista_precios_detalle.id_producto,
              cat_lista_precios_detalle.precio_unitario,
@@ -199,45 +204,6 @@ BEGIN
                order by Inve.orden_grupo_proveedor, Inve.grupo_proveedor , Inve.orden_linea, Inve.Linea, Inve.orden_familia,Inve.orden_subfamilia,Inve.Producto
  
        End
- 
- 
-       /*SELECT
-             Inve.id_producto,
-             Inve.nombre,
-             Inve.precio_unitario,
-             Inve.id_linea,
-             Inve.tasa_iva,
-             Inve.tasa_ieps,
-             Inve.rmi_autorizado,
-             Inve.precio_neto,
-             SUM(Inve.inventario) AS inventario,
-             Inve.id_proveedor,
-             Inve.proveedor, 
-        Inve.orden_proveedor
-       FROM
-       (
-       SELECT * FROM #CATALOGO_COMPLETO
-       UNION ALL
-       SELECT * FROM #CATALOGO_INVE
-       ) AS Inve
-       GROUP BY
-             Inve.id_producto,
-             Inve.nombre,
-             Inve.precio_unitario,
-             Inve.id_linea,
-             Inve.tasa_iva,
-             Inve.tasa_ieps,
-             Inve.rmi_autorizado,
-             Inve.precio_neto,
-             Inve.id_proveedor,
-             Inve.proveedor, 
-        Inve.orden_proveedor */
- 
-       --order by Inve.orden_grupo_proveedor, Inve.grupo_proveedor , Inve.orden_linea, Inve.Linea, Inve.orden_familia,Inve.orden_subfamilia,Inve.Producto
- 
-       /*SELECT * FROM #CATALOGO_COMPLETO
-       UNION ALL
-       SELECT * FROM #CATALOGO_INVE*/
  
 END
 
