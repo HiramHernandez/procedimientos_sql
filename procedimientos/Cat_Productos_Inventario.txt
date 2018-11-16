@@ -1,6 +1,6 @@
-USE [dsd_vallarta]
+USE [dsd_zamora]
 GO
-/****** Object:  StoredProcedure [dbo].[Cat_Productos_Inventario]    Script Date: 12/11/2018 04:49:20 p. m. ******/
+/****** Object:  StoredProcedure [dbo].[Cat_Productos_Inventario]    Script Date: 16/11/2018 12:49:11 p. m. ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
