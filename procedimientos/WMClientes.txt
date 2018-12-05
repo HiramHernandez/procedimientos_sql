@@ -1,6 +1,6 @@
 USE [dsd_vallarta]
 GO
-/****** Object:  StoredProcedure [dbo].[WMClientes]    Script Date: 12/11/2018 04:50:18 p. m. ******/
+/****** Object:  StoredProcedure [dbo].[WMClientes]    Script Date: 12/11/2018 05:09:55 p. m. ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -62,3 +62,5 @@ BEGIN
 			UPDATE cat_clientes_datos_venta SET id_cedis=@id_cedis,id_cliente_tipo=@id_tipo_cliente,id_giro=@id_giro,id_lista_precios=@id_lista_precios,
 			tipo_visita=@tipo_visita,concepto_baja=@concepto_baja,latitud=@latitud,longitud=@longitud,servicio=@servicio,dia=@dia_visita,orden=@orden,dia_reprogramado=@dia_reprogramado,orden_reprogramado=@orden_reprogramado WHERE ID_CLIENTE=@ID_CLIENTE AND id_ruta = @id_ruta
 		end
+
+END
